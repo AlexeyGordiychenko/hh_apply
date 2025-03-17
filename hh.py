@@ -1,5 +1,7 @@
+import argparse
 import asyncio
 import logging
+from typing import Tuple
 from settings import settings
 import aiohttp
 from asyncio import Queue, create_task
@@ -16,6 +18,21 @@ VACANCY_URL = (
     f"{settings.api_url.rstrip('/')}/resumes/{settings.resume_id}/similar_vacancies"
 )
 HEADERS = {"Authorization": f"Bearer {settings.token}"}
+
+
+def parse_args() -> Tuple[str, int]:
+    parser = argparse.ArgumentParser(
+        description="A script to apply to vacancies on hh.ru"
+    )
+    parser.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default="4",
+        help="Number of async workers",
+    )
+    args = parser.parse_args()
+    return args.workers
 
 
 async def fill_queue(session, queue):
@@ -65,15 +82,19 @@ async def fetch_vacancy_page(session, queue):
             queue.task_done()
 
 
-async def main():
+async def main(workers_num: int):
     queue = Queue()
     async with aiohttp.ClientSession() as session:
         await fill_queue(session, queue)
-        workers = [create_task(fetch_vacancy_page(session, queue)) for _ in range(2)]
+        workers = [
+            create_task(fetch_vacancy_page(session, queue)) for _ in range(workers_num)
+        ]
         await queue.join()
         for task in workers:
             task.cancel()
         await asyncio.gather(*workers, return_exceptions=True)
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    workers_num = parse_args()
+    asyncio.run(main(workers_num))
