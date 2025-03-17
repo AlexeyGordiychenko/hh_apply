@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 VACANCIES_URL = (
     f"{settings.api_url.rstrip('/')}/resumes/{settings.resume_id}/similar_vacancies"
 )
+NEGOTIATIONS_URL = f"{settings.api_url.rstrip('/')}/negotiations"
 HEADERS = {"Authorization": f"Bearer {settings.token}"}
+with open("message.txt", "r") as file:
+    COVER_LETTER = file.read()
 
 
 def parse_args() -> Tuple[str, int]:
@@ -60,8 +63,9 @@ async def fetch_vacancy_page(session, queue):
         try:
             vacancies = await fetch_vacancies_from_page(session, page, per_page)
             for idx, vacancy in enumerate(vacancies):
+                status, text = await apply_to_vacancy(session, vacancy["id"])
                 logger.info(
-                    f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
+                    f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']} APPLIED with status {status}: {text}"
                 )
         except Exception as e:
             logger.error(
@@ -86,6 +90,19 @@ async def fetch_vacancies_from_page(session, page, per_page):
         response_json = await response.json()
         logger.info(f"Page={page} got {len(response_json['items'])} vacancies")
         return response_json["items"]
+
+
+async def apply_to_vacancy(session, vacancy_id):
+    response = await session.post(
+        url=NEGOTIATIONS_URL,
+        headers=HEADERS,
+        data={
+            "vacancy_id": vacancy_id,
+            "resume_id": settings.resume_id,
+            "message": COVER_LETTER,
+        },
+    )
+    return response.status, await response.text()
 
 
 async def main(workers_num: int):
