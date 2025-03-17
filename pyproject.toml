@@ -1,0 +1,13 @@
+[project]
+name = "hh"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.11.13",
+    "notion-client>=2.3.0",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.8.1",
+    "requests>=2.32.3",
+]
