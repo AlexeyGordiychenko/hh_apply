@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-VACANCY_URL = (
+VACANCIES_URL = (
     f"{settings.api_url.rstrip('/')}/resumes/{settings.resume_id}/similar_vacancies"
 )
 HEADERS = {"Authorization": f"Bearer {settings.token}"}
@@ -36,10 +36,10 @@ def parse_args() -> Tuple[str, int]:
 
 
 async def fill_queue(session, queue):
-    response = await session.get(url=VACANCY_URL, headers=HEADERS)
+    response = await session.get(url=VACANCIES_URL, headers=HEADERS)
     if response.status != 200:
         logger.error(
-            f"Error fetching {VACANCY_URL}: {response.status}\n{await response.text()}"
+            f"Error fetching {VACANCIES_URL}: {response.status}\n{await response.text()}"
         )
         return False
     else:
@@ -59,13 +59,13 @@ async def fetch_vacancy_page(session, queue):
         logger.info(f"Fetch block ({page},{per_page}) from queue")
         try:
             response = await session.get(
-                url=VACANCY_URL,
+                url=VACANCIES_URL,
                 params={"page": page, "per_page": per_page},
                 headers=HEADERS,
             )
             if response.status != 200:
                 logger.error(
-                    f"Error fetching {VACANCY_URL} with page={page} per_page={per_page}: {response.status}\n{await response.text()}"
+                    f"Error fetching {VACANCIES_URL} with page={page} per_page={per_page}: {response.status}\n{await response.text()}"
                 )
             else:
                 response_json = await response.json()
