@@ -63,9 +63,12 @@ async def fetch_vacancy_page(session, queue):
         try:
             vacancies = await fetch_vacancies_from_page(session, page, per_page)
             for idx, vacancy in enumerate(vacancies):
-                status, text = await apply_to_vacancy(session, vacancy["id"])
+                status, negotiation_url, text = await apply_to_vacancy(
+                    session, vacancy["id"]
+                )
                 logger.info(
-                    f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']} APPLIED with status {status}: {text}"
+                    f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']} "
+                    f"APPLIED with status {status} got negotiation url: {negotiation_url} and text: {text}"
                 )
         except Exception as e:
             logger.error(
@@ -102,7 +105,7 @@ async def apply_to_vacancy(session, vacancy_id):
             "message": COVER_LETTER,
         },
     )
-    return response.status, await response.text()
+    return response.status, response.headers.get("Location", ""), await response.text()
 
 
 async def main(workers_num: int):
