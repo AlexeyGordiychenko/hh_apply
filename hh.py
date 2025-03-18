@@ -1,7 +1,9 @@
 import argparse
 import asyncio
+from datetime import datetime
 import logging
 from typing import Tuple
+
 from settings import settings
 import aiohttp
 from asyncio import Queue, create_task
@@ -21,6 +23,11 @@ NEGOTIATIONS_URL = f"{settings.api_url.rstrip('/')}/negotiations"
 HEADERS = {"Authorization": f"Bearer {settings.token}"}
 with open("message.txt", "r") as file:
     COVER_LETTER = file.read()
+NOTION_APPLY_DATE = datetime.now().strftime("%Y-%m-%d")
+NOTION_HEADERS = {
+    "Authorization": f"Bearer {settings.notion_secret}",
+    "Notion-Version": "2022-06-28",
+}
 
 
 def parse_args() -> Tuple[str, int]:
@@ -70,6 +77,14 @@ async def fetch_vacancy_page(session, queue):
                     f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']} "
                     f"APPLIED with status {status} got negotiation url: {negotiation_url} and text: {text}"
                 )
+                if status == 201:
+                    await add_apply_to_notion(
+                        session,
+                        company=vacancy["employer"]["name"],
+                        position=vacancy["name"],
+                        url=vacancy["alternate_url"],
+                        negotiation_url=negotiation_url,
+                    )
         except Exception as e:
             logger.error(
                 f"Fetch block ({page},{per_page}) from queue finished with error {str(e)}"
@@ -108,7 +123,50 @@ async def apply_to_vacancy(session, vacancy_id):
     return response.status, response.headers.get("Location", ""), await response.text()
 
 
+async def notion_enabled():
+    return settings.notion_db_id and settings.notion_secret
+
+
+async def add_apply_to_notion(
+    session: aiohttp.ClientSession,
+    company: str,
+    position: str,
+    url: str,
+    negotiation_url: str,
+):
+    if not await notion_enabled():
+        return
+
+    new_page_props = {
+        "COMPANY": {"title": [{"text": {"content": company}}]},
+        "POSITION": {"rich_text": [{"type": "text", "text": {"content": position}}]},
+        "APPLICATION DATE": {"date": {"start": NOTION_APPLY_DATE}},
+        "JOB POST": {"url": url},
+        "STATUS": {"status": {"name": "Applied"}},
+        "HH negotiation url": {"url": negotiation_url},
+    }
+    response = await session.post(
+        url=f"{settings.notion_api_url}/pages",
+        headers=NOTION_HEADERS,
+        json={
+            "parent": {"database_id": settings.notion_db_id},
+            "properties": new_page_props,
+        },
+        proxy=settings.notion_proxy,
+    )
+    if response.status != 200:
+        logger.error(
+            f"NOTION: Could not create a page for {url}: {response.status} {await response.text()}"
+        )
+    else:
+        response_json = await response.json()
+        logger.info(f"NOTION: Page created with id: {response_json['id']}")
+
+
 async def main(workers_num: int):
+    if not await notion_enabled():
+        logger.info("NOTION: Notion is disabled")
+
     queue = Queue()
     async with aiohttp.ClientSession() as session:
         await fill_queue(session, queue)
