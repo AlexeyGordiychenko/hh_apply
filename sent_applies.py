@@ -12,7 +12,7 @@ from asyncio import Queue, create_task
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    filename="hh.log",
+    filename="sent_applies.log",
 )
 logger = logging.getLogger(__name__)
 
