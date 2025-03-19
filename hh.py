@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 import logging
-from typing import Tuple
+from typing import List, Tuple
 
 from settings import settings
 import aiohttp
@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def parse_args() -> Tuple[str, int]:
+def parse_args() -> int:
     parser = argparse.ArgumentParser(
         description="A script to apply to vacancies on hh.ru"
     )
@@ -31,7 +31,7 @@ def parse_args() -> Tuple[str, int]:
     return args.workers
 
 
-async def fill_queue(session, queue):
+async def fill_queue(session: aiohttp.ClientSession, queue: Queue) -> None:
     response = await session.get(
         url=settings.vacancies_url, headers=settings.hh_headers
     )
@@ -39,7 +39,6 @@ async def fill_queue(session, queue):
         logger.error(
             f"Error fetching {settings.vacancies_url}: {response.status}\n{await response.text()}"
         )
-        return False
     else:
         response_json = await response.json()
         pages, per_page = response_json["pages"], response_json["per_page"]
@@ -51,15 +50,17 @@ async def fill_queue(session, queue):
             await queue.put((i, per_page))
 
 
-async def fetch_vacancy_page(session, queue):
+async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> None:
     while True:
         page, per_page = await queue.get()
         logger.info(f"Fetch block ({page},{per_page}) from queue")
         try:
-            vacancies = await fetch_vacancies_from_page(session, page, per_page)
+            vacancies = await fetch_vacancies_from_page(
+                session=session, page=page, per_page=per_page
+            )
             for idx, vacancy in enumerate(vacancies):
                 status, negotiation_url, text = await apply_to_vacancy(
-                    session, vacancy["id"]
+                    session=session, vacancy_id=vacancy["id"]
                 )
                 logger.info(
                     f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']} "
@@ -67,7 +68,7 @@ async def fetch_vacancy_page(session, queue):
                 )
                 if status == 201:
                     await add_apply_to_notion(
-                        session,
+                        session=session,
                         company=vacancy["employer"]["name"],
                         position=vacancy["name"],
                         url=vacancy["alternate_url"],
@@ -81,7 +82,9 @@ async def fetch_vacancy_page(session, queue):
             queue.task_done()
 
 
-async def fetch_vacancies_from_page(session, page, per_page):
+async def fetch_vacancies_from_page(
+    session: aiohttp.ClientSession, page: int, per_page: int
+) -> List:
     response = await session.get(
         url=settings.vacancies_url,
         params={"page": page, "per_page": per_page},
@@ -98,7 +101,9 @@ async def fetch_vacancies_from_page(session, page, per_page):
         return response_json["items"]
 
 
-async def apply_to_vacancy(session, vacancy_id):
+async def apply_to_vacancy(
+    session: aiohttp.ClientSession, vacancy_id: int
+) -> Tuple[int, str, str]:
     response = await session.post(
         url=settings.negotiation_url,
         headers=settings.hh_headers,
@@ -117,7 +122,7 @@ async def add_apply_to_notion(
     position: str,
     url: str,
     negotiation_url: str,
-):
+) -> None:
     if not settings.notion_enabled:
         return
 
@@ -147,7 +152,7 @@ async def add_apply_to_notion(
         logger.info(f"NOTION: Page created with id: {response_json['id']}")
 
 
-async def main(workers_num: int):
+async def main(workers_num: int) -> None:
     if not settings.notion_enabled:
         logger.info("NOTION: Notion is disabled")
 
@@ -165,4 +170,4 @@ async def main(workers_num: int):
 
 if __name__ == "__main__":
     workers_num = parse_args()
-    asyncio.run(main(workers_num))
+    asyncio.run(main(workers_num=workers_num))
