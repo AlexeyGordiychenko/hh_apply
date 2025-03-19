@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-from datetime import datetime
 import logging
 from typing import Tuple
 
@@ -15,19 +14,6 @@ logging.basicConfig(
     filename="hh.log",
 )
 logger = logging.getLogger(__name__)
-
-VACANCIES_URL = (
-    f"{settings.api_url.rstrip('/')}/resumes/{settings.resume_id}/similar_vacancies"
-)
-NEGOTIATIONS_URL = f"{settings.api_url.rstrip('/')}/negotiations"
-HEADERS = {"Authorization": f"Bearer {settings.token}"}
-with open("message.txt", "r") as file:
-    COVER_LETTER = file.read()
-NOTION_APPLY_DATE = datetime.now().strftime("%Y-%m-%d")
-NOTION_HEADERS = {
-    "Authorization": f"Bearer {settings.notion_secret}",
-    "Notion-Version": "2022-06-28",
-}
 
 
 def parse_args() -> Tuple[str, int]:
@@ -46,10 +32,12 @@ def parse_args() -> Tuple[str, int]:
 
 
 async def fill_queue(session, queue):
-    response = await session.get(url=VACANCIES_URL, headers=HEADERS)
+    response = await session.get(
+        url=settings.vacancies_url, headers=settings.hh_headers
+    )
     if response.status != 200:
         logger.error(
-            f"Error fetching {VACANCIES_URL}: {response.status}\n{await response.text()}"
+            f"Error fetching {settings.vacancies_url}: {response.status}\n{await response.text()}"
         )
         return False
     else:
@@ -95,13 +83,13 @@ async def fetch_vacancy_page(session, queue):
 
 async def fetch_vacancies_from_page(session, page, per_page):
     response = await session.get(
-        url=VACANCIES_URL,
+        url=settings.vacancies_url,
         params={"page": page, "per_page": per_page},
-        headers=HEADERS,
+        headers=settings.hh_headers,
     )
     if response.status != 200:
         logger.error(
-            f"Error fetching {VACANCIES_URL} with page={page} per_page={per_page}: {response.status}\n{await response.text()}"
+            f"Error fetching {settings.vacancies_url} with page={page} per_page={per_page}: {response.status}\n{await response.text()}"
         )
         return []
     else:
@@ -112,19 +100,15 @@ async def fetch_vacancies_from_page(session, page, per_page):
 
 async def apply_to_vacancy(session, vacancy_id):
     response = await session.post(
-        url=NEGOTIATIONS_URL,
-        headers=HEADERS,
+        url=settings.negotiation_url,
+        headers=settings.hh_headers,
         data={
             "vacancy_id": vacancy_id,
             "resume_id": settings.resume_id,
-            "message": COVER_LETTER,
+            "message": settings.cover_letter,
         },
     )
     return response.status, response.headers.get("Location", ""), await response.text()
-
-
-async def notion_enabled():
-    return settings.notion_db_id and settings.notion_secret
 
 
 async def add_apply_to_notion(
@@ -134,20 +118,20 @@ async def add_apply_to_notion(
     url: str,
     negotiation_url: str,
 ):
-    if not await notion_enabled():
+    if not settings.notion_enabled:
         return
 
     new_page_props = {
         "COMPANY": {"title": [{"text": {"content": company}}]},
         "POSITION": {"rich_text": [{"type": "text", "text": {"content": position}}]},
-        "APPLICATION DATE": {"date": {"start": NOTION_APPLY_DATE}},
+        "APPLICATION DATE": {"date": {"start": settings.notion_apply_date}},
         "JOB POST": {"url": url},
         "STATUS": {"status": {"name": "Applied"}},
         "HH negotiation url": {"url": negotiation_url},
     }
     response = await session.post(
         url=f"{settings.notion_api_url}/pages",
-        headers=NOTION_HEADERS,
+        headers=settings.notion_headers,
         json={
             "parent": {"database_id": settings.notion_db_id},
             "properties": new_page_props,
@@ -164,7 +148,7 @@ async def add_apply_to_notion(
 
 
 async def main(workers_num: int):
-    if not await notion_enabled():
+    if not settings.notion_enabled:
         logger.info("NOTION: Notion is disabled")
 
     queue = Queue()
