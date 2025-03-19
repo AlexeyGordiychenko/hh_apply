@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import re
 from typing import List, Tuple
 
 from settings import settings
@@ -59,6 +60,12 @@ async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> No
                 session=session, page=page, per_page=per_page
             )
             for idx, vacancy in enumerate(vacancies):
+                if await vacancy_blacklisted(vacancy):
+                    logger.info(
+                        f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} skipped due to blacklist"
+                    )
+                    continue
+
                 status, negotiation_url, text = await apply_to_vacancy(
                     session=session, vacancy_id=vacancy["id"]
                 )
@@ -150,6 +157,14 @@ async def add_apply_to_notion(
     else:
         response_json = await response.json()
         logger.info(f"NOTION: Page created with id: {response_json['id']}")
+
+
+async def vacancy_blacklisted(vacancy: dict) -> bool:
+    pattern = r"\b[0-9а-яa-z]+\b"
+    return any(
+        word in settings.blacklist
+        for word in re.findall(pattern, vacancy["name"].lower())
+    )
 
 
 async def main(workers_num: int) -> None:

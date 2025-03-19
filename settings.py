@@ -47,6 +47,13 @@ class Settings(BaseSettings):
         path = Path("cover_letter.txt")
         return path.read_text() if path.exists() else ""
 
+    @computed_field
+    def blacklist(self) -> str:
+        path = Path("blacklist.txt")
+        return (
+            set(map(str.lower, path.read_text().splitlines())) if path.exists() else ""
+        )
+
     class Config:
         env_file = ".env"
         extra = "ignore"
