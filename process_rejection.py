@@ -71,6 +71,10 @@ async def process_application_status(
         try:
             if await application_rejected(session=session, hh_url=hh_url):
                 await update_notion_status(session=session, page_id=page_id)
+            else:
+                logger.info(
+                    f"Processing page {page_id} with HH url {hh_url} from queue: application is not rejected"
+                )
         except Exception as e:
             logger.error(
                 f"Processing page {page_id} with HH url {hh_url} from queue finished with error {str(e)}"
