@@ -60,7 +60,9 @@ async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> No
                 session=session, page=page, per_page=per_page
             )
             for idx, vacancy in enumerate(vacancies):
-                if await vacancy_blacklisted(vacancy):
+                if await vacancy_blacklisted(
+                    vacancy["name"] + " " + vacancy["employer"]["name"]
+                ):
                     logger.info(
                         f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} skipped due to blacklist"
                     )
@@ -159,11 +161,10 @@ async def add_apply_to_notion(
         logger.info(f"NOTION: Page created with id: {response_json['id']}")
 
 
-async def vacancy_blacklisted(vacancy: dict) -> bool:
+async def vacancy_blacklisted(vacancy_text: str) -> bool:
     pattern = r"\b[0-9а-яa-z]+\b"
     return any(
-        word in settings.blacklist
-        for word in re.findall(pattern, vacancy["name"].lower())
+        word in settings.blacklist for word in re.findall(pattern, vacancy_text.lower())
     )
 
 
