@@ -85,7 +85,7 @@ async def process_application_status(
 
 async def application_rejected(session: aiohttp.ClientSession, hh_url: str) -> bool:
     response = await session.get(
-        url=f"{settings.hh_api_url}/{hh_url}", headers=settings.hh_headers
+        url=f"{settings.hh_api_url}/{hh_url.strip('/')}", headers=settings.hh_headers
     )
     if response.status != 200:
         logger.error(
