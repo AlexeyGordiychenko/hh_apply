@@ -1,7 +1,6 @@
 import argparse
 import asyncio
 import logging
-import re
 from typing import List, Tuple
 
 from settings import settings
@@ -162,9 +161,9 @@ async def add_apply_to_notion(
 
 
 async def vacancy_blacklisted(vacancy_text: str) -> bool:
-    pattern = r"\b[0-9а-яa-z]+\b"
     return any(
-        word in settings.blacklist for word in re.findall(pattern, vacancy_text.lower())
+        word in settings.blacklist
+        for word in settings.blacklist_regex.findall(vacancy_text.lower())
     )
 
 

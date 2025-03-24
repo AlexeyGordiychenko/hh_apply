@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+import re
 from pydantic_settings import BaseSettings
 from pydantic import Field, computed_field
 
@@ -53,6 +54,10 @@ class Settings(BaseSettings):
         return (
             set(map(str.lower, path.read_text().splitlines())) if path.exists() else ""
         )
+
+    @computed_field
+    def blacklist_regex(self) -> str:
+        return re.compile(r"\b[0-9а-яa-z]+\b")
 
     class Config:
         env_file = ".env"
