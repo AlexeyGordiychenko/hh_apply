@@ -141,6 +141,7 @@ async def add_apply_to_notion(
         "JOB POST": {"url": url},
         "STATUS": {"status": {"name": "Applied"}},
         "HH negotiation url": {"url": negotiation_url},
+        "RESUME USED": {"relation": [{"id": settings.notion_resume_id}]},
     }
     response = await session.post(
         url=f"{settings.notion_api_url}/pages",

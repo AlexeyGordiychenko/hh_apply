@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     notion_secret: str = Field("", env="NOTION_SECRET")
     notion_db_id: str = Field("", env="NOTION_DB_ID")
     notion_proxy: str | None = Field(None, env="NOTION_PROXY")
+    notion_resume_id: str = Field("", env="NOTION_RESUME_ID")
 
     @computed_field
     def vacancies_url(self) -> str:
