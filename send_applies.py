@@ -116,6 +116,7 @@ async def apply_to_vacancy(
             "resume_id": settings.resume_id,
             "message": settings.cover_letter,
         },
+        allow_redirects=False,
     )
     if response.status == 201:
         logger.info(
