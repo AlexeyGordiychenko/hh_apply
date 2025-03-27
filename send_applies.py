@@ -59,20 +59,18 @@ async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> No
                 session=session, page=page, per_page=per_page
             )
             for idx, vacancy in enumerate(vacancies):
+                logger_basic_message = f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
                 if await vacancy_blacklisted(
                     vacancy["name"] + " " + vacancy["employer"]["name"]
                 ):
-                    logger.info(
-                        f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} skipped due to blacklist"
-                    )
+                    logger.info(f"{logger_basic_message} skipped due to blacklist")
                     continue
 
                 status, negotiation_url, text = await apply_to_vacancy(
                     session=session, vacancy_id=vacancy["id"]
                 )
                 logger.info(
-                    f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']} "
-                    f"APPLIED with status {status} got negotiation url: {negotiation_url} and text: {text}"
+                    f"{logger_basic_message} APPLIED with status {status} got negotiation url: {negotiation_url} and text: {text}"
                 )
                 if status == 201:
                     await add_apply_to_notion(
@@ -81,6 +79,7 @@ async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> No
                         position=vacancy["name"],
                         url=vacancy["alternate_url"],
                         negotiation_url=negotiation_url,
+                        logger_msg=logger_basic_message,
                     )
         except Exception as e:
             logger.error(
@@ -130,6 +129,7 @@ async def add_apply_to_notion(
     position: str,
     url: str,
     negotiation_url: str,
+    logger_msg: str,
 ) -> None:
     if not settings.notion_enabled:
         return
@@ -154,11 +154,11 @@ async def add_apply_to_notion(
     )
     if response.status != 200:
         logger.error(
-            f"NOTION: Could not create a page for {url}: {response.status} {await response.text()}"
+            f"{logger_msg} NOTION: Could not create a page: {response.status} {await response.text()}"
         )
     else:
         response_json = await response.json()
-        logger.info(f"NOTION: Page created with id: {response_json['id']}")
+        logger.info(f"{logger_msg} NOTION: Page created with id: {response_json['id']}")
 
 
 async def vacancy_blacklisted(vacancy_text: str) -> bool:
