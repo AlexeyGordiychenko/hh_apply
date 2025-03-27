@@ -1,8 +1,9 @@
 import argparse
 import asyncio
 import logging
-from typing import List, Tuple
+from typing import List, Optional
 
+from exceptions import HH_Limit_Exceeded_Error
 from settings import settings
 import aiohttp
 from asyncio import Queue, create_task
@@ -54,39 +55,35 @@ async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> No
     while True:
         page, per_page = await queue.get()
         logger.info(f"Fetch block ({page},{per_page}) from queue")
-        try:
-            vacancies = await fetch_vacancies_from_page(
-                session=session, page=page, per_page=per_page
-            )
-            for idx, vacancy in enumerate(vacancies):
-                logger_basic_message = f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
-                if await vacancy_blacklisted(
-                    vacancy["name"] + " " + vacancy["employer"]["name"]
-                ):
-                    logger.info(f"{logger_basic_message} skipped due to blacklist")
-                    continue
-
-                status, negotiation_url, text = await apply_to_vacancy(
-                    session=session, vacancy_id=vacancy["id"]
+        vacancies = await fetch_vacancies_from_page(
+            session=session, page=page, per_page=per_page
+        )
+        for idx, vacancy in enumerate(vacancies):
+            logger_basic_message = f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
+            if await vacancy_blacklisted(
+                vacancy["name"] + " " + vacancy["employer"]["name"]
+            ):
+                logger.info(f"{logger_basic_message} SKIPPED due to blacklist")
+                continue
+            try:
+                negotiation_url = await apply_to_vacancy(
+                    session=session,
+                    vacancy_id=vacancy["id"],
+                    logger_msg=logger_basic_message,
                 )
-                logger.info(
-                    f"{logger_basic_message} APPLIED with status {status} got negotiation url: {negotiation_url} and text: {text}"
+            except HH_Limit_Exceeded_Error:
+                queue.task_done()
+                return
+            if negotiation_url:
+                await add_apply_to_notion(
+                    session=session,
+                    company=vacancy["employer"]["name"],
+                    position=vacancy["name"],
+                    url=vacancy["alternate_url"],
+                    negotiation_url=negotiation_url,
+                    logger_msg=logger_basic_message,
                 )
-                if status == 201:
-                    await add_apply_to_notion(
-                        session=session,
-                        company=vacancy["employer"]["name"],
-                        position=vacancy["name"],
-                        url=vacancy["alternate_url"],
-                        negotiation_url=negotiation_url,
-                        logger_msg=logger_basic_message,
-                    )
-        except Exception as e:
-            logger.error(
-                f"Fetch block ({page},{per_page}) from queue finished with error {str(e)}"
-            )
-        finally:
-            queue.task_done()
+        queue.task_done()
 
 
 async def fetch_vacancies_from_page(
@@ -109,8 +106,8 @@ async def fetch_vacancies_from_page(
 
 
 async def apply_to_vacancy(
-    session: aiohttp.ClientSession, vacancy_id: int
-) -> Tuple[int, str, str]:
+    session: aiohttp.ClientSession, vacancy_id: int, logger_msg: str
+) -> Optional[str]:
     response = await session.post(
         url=settings.negotiation_url,
         headers=settings.hh_headers,
@@ -120,7 +117,29 @@ async def apply_to_vacancy(
             "message": settings.cover_letter,
         },
     )
-    return response.status, response.headers.get("Location", ""), await response.text()
+    if response.status == 201:
+        logger.info(
+            f"{logger_msg} APPLIED successfully, GOT negotiation url: {response.headers.get('Location', '')}"
+        )
+        return response.headers.get("Location", "")
+    else:
+        error_msg = ""
+        if response.status == 403 or response.status == 400:
+            response_json = await response.json()
+            if any(
+                error["value"] == "limit_exceeded" for error in response_json["errors"]
+            ):
+                logger.error(f"{logger_msg} LIMIT EXCEEDED. Stopping...")
+                raise HH_Limit_Exceeded_Error
+            else:
+                error_msg = response_json["description"]
+        elif response.status == 303:
+            error_msg = (
+                f"External apply required on {response.headers.get('Location', '')}"
+            )
+        else:
+            error_msg = f"Unknown error: {response.status} {await response.text()}"
+        logger.error(f"{logger_msg} apply FAILED with error: {error_msg}")
 
 
 async def add_apply_to_notion(
