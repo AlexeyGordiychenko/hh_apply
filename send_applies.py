@@ -28,8 +28,14 @@ def parse_args() -> int:
         default="4",
         help="Number of async workers",
     )
+    parser.add_argument(
+        "-t",
+        "--test",
+        action="store_true",
+        help="Test run (no applies just logging)",
+    )
     args = parser.parse_args()
-    return args.workers
+    return args.workers, args.test
 
 
 async def fill_queue(session: aiohttp.ClientSession, queue: Queue) -> None:
@@ -51,7 +57,9 @@ async def fill_queue(session: aiohttp.ClientSession, queue: Queue) -> None:
             await queue.put((i, per_page))
 
 
-async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> None:
+async def fetch_vacancy_page(
+    session: aiohttp.ClientSession, queue: Queue, test_run: bool
+) -> None:
     while True:
         page, per_page = await queue.get()
         logger.info(f"Fetch block ({page},{per_page}) from queue")
@@ -65,6 +73,10 @@ async def fetch_vacancy_page(session: aiohttp.ClientSession, queue: Queue) -> No
             ):
                 logger.info(f"{logger_basic_message} SKIPPED due to blacklist")
                 continue
+            if test_run:
+                logger.info(f"{logger_basic_message} TEST RUN")
+                continue
+
             try:
                 negotiation_url = await apply_to_vacancy(
                     session=session,
@@ -188,7 +200,7 @@ async def vacancy_blacklisted(vacancy_text: str) -> bool:
     )
 
 
-async def main(workers_num: int) -> None:
+async def main(workers_num: int, test_run: bool) -> None:
     if not settings.notion_enabled:
         logger.info("NOTION: Notion is disabled")
 
@@ -196,7 +208,8 @@ async def main(workers_num: int) -> None:
     async with aiohttp.ClientSession() as session:
         await fill_queue(session, queue)
         workers = [
-            create_task(fetch_vacancy_page(session, queue)) for _ in range(workers_num)
+            create_task(fetch_vacancy_page(session, queue, test_run))
+            for _ in range(workers_num)
         ]
         await queue.join()
         for task in workers:
@@ -205,5 +218,5 @@ async def main(workers_num: int) -> None:
 
 
 if __name__ == "__main__":
-    workers_num = parse_args()
-    asyncio.run(main(workers_num=workers_num))
+    workers_num, test_run = parse_args()
+    asyncio.run(main(workers_num=workers_num, test_run=test_run))
