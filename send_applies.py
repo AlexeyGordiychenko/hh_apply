@@ -84,8 +84,8 @@ async def fetch_vacancy_page(
                     logger_msg=logger_basic_message,
                 )
             except HH_Limit_Exceeded_Error:
-                queue.task_done()
-                return
+                queue.shutdown(immediate=True)
+                break
             if negotiation_url:
                 await add_apply_to_notion(
                     session=session,
