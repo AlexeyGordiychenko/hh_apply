@@ -213,6 +213,7 @@ async def main(workers_num: int, test_run: bool) -> None:
         for task in workers:
             task.cancel()
         await asyncio.gather(*workers, return_exceptions=True)
+    logger.info(f"{'-' * 60}Done")
 
 
 if __name__ == "__main__":
