@@ -38,33 +38,34 @@ def parse_args() -> int:
     return args.workers, args.test
 
 
-async def fill_queue(session: aiohttp.ClientSession, queue: Queue) -> None:
+async def get_vacancies_response(session: aiohttp.ClientSession, page: int = 0):
     response = await session.get(
-        url=settings.vacancies_url, headers=settings.hh_headers
+        url=settings.vacancies_url, params={"page": page}, headers=settings.hh_headers
     )
     if response.status != 200:
         logger.error(
-            f"Error fetching {settings.vacancies_url}: {response.status}\n{await response.text()}"
+            f"Error fetching page {page} with {response.url}: {response.status}\n{await response.text()}"
         )
+        return None
     else:
         response_json = await response.json()
-        pages, per_page = response_json["pages"], response_json["per_page"]
-        logger.info(
-            f"Got {response_json['found']} vacancies, {pages} pages, {per_page} per page"
-        )
-        for i in range(pages):
-            logger.info(f"Add block ({i},{per_page}) to queue")
-            await queue.put((i, per_page))
+        return response_json
+
+
+async def fill_queue(queue: Queue, start_page: int, end_page: int) -> None:
+    for i in range(start_page, end_page):
+        logger.info(f"Add page {i} to queue")
+        await queue.put(i)
 
 
 async def fetch_vacancy_page(
     session: aiohttp.ClientSession, queue: Queue, test_run: bool
 ) -> None:
     while True:
-        page, per_page = await queue.get()
-        logger.info(f"Fetch block ({page},{per_page}) from queue")
-        vacancies = await fetch_vacancies_from_page(
-            session=session, page=page, per_page=per_page
+        page = await queue.get()
+        response_json = await get_vacancies_response(session=session, page=page)
+        vacancies = await process_vacancies_response(
+            response_json=response_json, queue=queue, page=page
         )
         for idx, vacancy in enumerate(vacancies):
             logger_basic_message = f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
@@ -98,23 +99,20 @@ async def fetch_vacancy_page(
         queue.task_done()
 
 
-async def fetch_vacancies_from_page(
-    session: aiohttp.ClientSession, page: int, per_page: int
+async def process_vacancies_response(
+    response_json: Optional[dict], queue: Queue, page: int = 0
 ) -> List:
-    response = await session.get(
-        url=settings.vacancies_url,
-        params={"page": page, "per_page": per_page},
-        headers=settings.hh_headers,
-    )
-    if response.status != 200:
-        logger.error(
-            f"Error fetching {settings.vacancies_url} with page={page} per_page={per_page}: {response.status}\n{await response.text()}"
-        )
-        return []
-    else:
-        response_json = await response.json()
+    if response_json:
+        if page == 0:
+            logger.info(
+                f"Got {response_json['found']} vacancies, {response_json['pages']} pages"
+            )
+            await fill_queue(
+                queue=queue, start_page=page + 1, end_page=response_json["pages"]
+            )
         logger.info(f"Page={page} got {len(response_json['items'])} vacancies")
         return response_json["items"]
+    return []
 
 
 async def apply_to_vacancy(
@@ -206,7 +204,7 @@ async def main(workers_num: int, test_run: bool) -> None:
 
     queue = Queue()
     async with aiohttp.ClientSession() as session:
-        await fill_queue(session, queue)
+        await queue.put(0)
         workers = [
             create_task(fetch_vacancy_page(session, queue, test_run))
             for _ in range(workers_num)
