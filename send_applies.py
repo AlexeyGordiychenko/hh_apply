@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import logging
 from asyncio import Queue, create_task
+from enum import Enum
 from typing import List, Optional
 
 import aiohttp
@@ -14,6 +15,11 @@ logging.basicConfig(
     filename=__file__.replace(".py", ".log"),
 )
 logger = logging.getLogger(__name__)
+
+
+class SearchType(Enum):
+    SIMILAR = "similar"
+    QUERY = "query"
 
 
 def parse_args() -> int:
@@ -33,14 +39,47 @@ def parse_args() -> int:
         action="store_true",
         help="Test run (no applies just logging)",
     )
-    args = parser.parse_args()
-    return args.workers, args.test
-
-
-async def get_vacancies_response(session: aiohttp.ClientSession, page: int = 0):
-    response = await session.get(
-        url=settings.vacancies_url, params={"page": page}, headers=settings.hh_headers
+    parser.add_argument(
+        "-s",
+        "--search",
+        type=SearchType,
+        choices=list(SearchType),
+        required=True,
+        help="Search similar or query",
     )
+    args = parser.parse_args()
+    return args.workers, args.test, args.search
+
+
+async def get_vacancies_response(
+    session: aiohttp.ClientSession, search: SearchType, page: int = 0
+) -> Optional[dict]:
+    if search == SearchType.SIMILAR:
+        response = await session.get(
+            url=settings.vacancies_url,
+            params={"page": page},
+            headers=settings.hh_headers,
+        )
+    elif search == SearchType.QUERY:
+        # TODO: use .yml file for this
+        params = [
+            ("text", "python"),
+            ("professional_role", 96),
+            ("search_field", "name"),
+            (
+                "excluded_text",
+                "senior,сеньор,lead,преподаватель,автор,наставник,руководитель,репетитор,старший,ведущий,главный,techlead",
+            ),
+            ("work_format", "REMOTE"),
+            ("page", page),
+        ]
+        response = await session.get(
+            url=f"{settings.hh_api_url}/vacancies",
+            params=params,
+            headers=settings.hh_headers,
+        )
+    else:
+        return None
     if response.status != 200:
         logger.error(
             f"Error fetching page {page} with {response.url}: {response.status}\n{await response.text()}"
@@ -58,11 +97,13 @@ async def fill_queue(queue: Queue, start_page: int, end_page: int) -> None:
 
 
 async def fetch_vacancy_page(
-    session: aiohttp.ClientSession, queue: Queue, test_run: bool
+    session: aiohttp.ClientSession, queue: Queue, test_run: bool, search: SearchType
 ) -> None:
     while True:
         page = await queue.get()
-        response_json = await get_vacancies_response(session=session, page=page)
+        response_json = await get_vacancies_response(
+            session=session, page=page, search=search
+        )
         vacancies = await process_vacancies_response(
             response_json=response_json, queue=queue, page=page
         )
@@ -197,7 +238,7 @@ async def vacancy_blacklisted(vacancy_text: str) -> bool:
     )
 
 
-async def main(workers_num: int, test_run: bool) -> None:
+async def main(workers_num: int, test_run: bool, search: SearchType) -> None:
     if not settings.notion_enabled:
         logger.info("NOTION: Notion is disabled")
 
@@ -205,7 +246,11 @@ async def main(workers_num: int, test_run: bool) -> None:
     async with aiohttp.ClientSession() as session:
         await queue.put(0)
         workers = [
-            create_task(fetch_vacancy_page(session, queue, test_run))
+            create_task(
+                fetch_vacancy_page(
+                    session=session, queue=queue, test_run=test_run, search=search
+                )
+            )
             for _ in range(workers_num)
         ]
         await queue.join()
@@ -216,5 +261,5 @@ async def main(workers_num: int, test_run: bool) -> None:
 
 
 if __name__ == "__main__":
-    workers_num, test_run = parse_args()
-    asyncio.run(main(workers_num=workers_num, test_run=test_run))
+    workers_num, test_run, search = parse_args()
+    asyncio.run(main(workers_num=workers_num, test_run=test_run, search=search))
