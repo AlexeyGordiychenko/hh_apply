@@ -69,7 +69,7 @@ async def fetch_vacancy_page(
         for idx, vacancy in enumerate(vacancies):
             logger_basic_message = f"Page={page:02d} idx={idx:02d}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
             if await vacancy_blacklisted(
-                vacancy["name"] + " " + vacancy["employer"]["name"]
+                " ".join((vacancy["id"], vacancy["name"], vacancy["employer"]["name"]))
             ):
                 logger.info(f"{logger_basic_message} SKIPPED due to blacklist")
                 continue
