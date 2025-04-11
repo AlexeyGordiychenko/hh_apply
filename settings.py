@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings
@@ -13,7 +14,7 @@ class Settings(BaseSettings):
     notion_api_url: str = Field("https://api.notion.com/v1", env="NOTION_API_URL")
     notion_secret: str = Field("", env="NOTION_SECRET")
     notion_db_id: str = Field("", env="NOTION_DB_ID")
-    notion_proxy: str | None = Field(None, env="NOTION_PROXY")
+    notion_proxy: Optional[str] = Field(None, env="NOTION_PROXY")
     notion_resume_id: str = Field("", env="NOTION_RESUME_ID")
 
     @computed_field
