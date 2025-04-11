@@ -39,28 +39,34 @@ async def fill_queue(session: aiohttp.ClientSession, queue: Queue) -> None:
         }
     }
 
-    response = await session.post(
-        url=f"{settings.notion_api_url}/databases/{settings.notion_db_id}/query",
-        headers=settings.notion_headers,
-        json=db_filter,
-        proxy=settings.notion_proxy,
-    )
-    if response.status != 200:
-        logger.error(
-            f"Couldn't query database: {response.status} {await response.text()}"
+    while True:
+        response = await session.post(
+            url=f"{settings.notion_api_url}/databases/{settings.notion_db_id}/query",
+            headers=settings.notion_headers,
+            json=db_filter,
+            proxy=settings.notion_proxy,
         )
-    else:
-        response_json = await response.json()
-        results = response_json["results"]
-        logger.info(f"Received {len(results)} results")
-
-        for page in results:
-            page_id, hh_url = (
-                page["id"],
-                page["properties"]["HH negotiation url"]["url"],
+        if response.status != 200:
+            logger.error(
+                f"Couldn't query database: {response.status} {await response.text()}"
             )
-            logger.info(f"Add page {page_id} with HH url {hh_url} to queue")
-            await queue.put((page_id, hh_url))
+            break
+        else:
+            response_json = await response.json()
+            results = response_json["results"]
+            logger.info(f"Received batch {len(results)} results")
+
+            for page in results:
+                page_id, hh_url = (
+                    page["id"],
+                    page["properties"]["HH negotiation url"]["url"],
+                )
+                logger.info(f"Add page {page_id} with HH url {hh_url} to queue")
+                await queue.put((page_id, hh_url))
+            if response_json.get("has_more") and response_json.get("next_cursor"):
+                db_filter["start_cursor"] = response_json["next_cursor"]
+            else:
+                break
 
 
 async def process_application_status(
