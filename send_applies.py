@@ -67,7 +67,7 @@ async def fetch_vacancy_page(
             response_json=response_json, queue=queue, page=page
         )
         for idx, vacancy in enumerate(vacancies):
-            logger_basic_message = f"Page={page} idx={idx}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
+            logger_basic_message = f"Page={page:02d} idx={idx:02d}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
             if await vacancy_blacklisted(
                 vacancy["name"] + " " + vacancy["employer"]["name"]
             ):
