@@ -1,13 +1,12 @@
 import argparse
 import asyncio
 import logging
+from asyncio import Queue, create_task
 from typing import List, Optional
 
+import aiohttp
 from exceptions import HH_Limit_Exceeded_Error
 from settings import settings
-import aiohttp
-from asyncio import Queue, create_task
-
 
 logging.basicConfig(
     level=logging.INFO,
