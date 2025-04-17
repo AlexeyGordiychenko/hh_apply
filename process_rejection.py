@@ -1,10 +1,11 @@
 import argparse
 import asyncio
 import logging
-
-from settings import settings
-import aiohttp
 from asyncio import Queue, create_task
+from enum import Enum
+
+import aiohttp
+from settings import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,6 +13,11 @@ logging.basicConfig(
     filename="process_rejection.log",
 )
 logger = logging.getLogger(__name__)
+
+
+class RejectionType(Enum):
+    UNSUCCESSFUL = "Unsuccessful"
+    NO_RESPONSE = "No response"
 
 
 def parse_args() -> int:
@@ -75,8 +81,13 @@ async def process_application_status(
     while True:
         page_id, hh_url = await queue.get()
         try:
-            if await application_rejected(session=session, hh_url=hh_url):
-                await update_notion_status(session=session, page_id=page_id)
+            application_status = await get_application_status(
+                session=session, hh_url=hh_url
+            )
+            if application_status:
+                await update_notion_status(
+                    session=session, page_id=page_id, status=application_status
+                )
             else:
                 logger.info(
                     f"Processing page {page_id} with HH url {hh_url} from queue: application is not rejected"
@@ -89,7 +100,9 @@ async def process_application_status(
             queue.task_done()
 
 
-async def application_rejected(session: aiohttp.ClientSession, hh_url: str) -> bool:
+async def get_application_status(
+    session: aiohttp.ClientSession, hh_url: str
+) -> RejectionType:
     response = await session.get(
         url=f"{settings.hh_api_url}/{hh_url.strip('/')}", headers=settings.hh_headers
     )
@@ -97,17 +110,24 @@ async def application_rejected(session: aiohttp.ClientSession, hh_url: str) -> b
         logger.error(
             f"Couldn't fetch HH url {hh_url}: {response.status} {await response.text()}"
         )
-        return False
+        return None
     else:
         response_json = await response.json()
-        return response_json["state"]["id"] == "discard"
+        if response_json["state"]["id"] == "discard":
+            return RejectionType.UNSUCCESSFUL
+        elif response_json["vacancy"]["archived"]:
+            return RejectionType.NO_RESPONSE
+        else:
+            return None
 
 
-async def update_notion_status(session: aiohttp.ClientSession, page_id: str) -> None:
+async def update_notion_status(
+    session: aiohttp.ClientSession, page_id: str, status: RejectionType
+) -> None:
     response = await session.patch(
         url=f"{settings.notion_api_url}/pages/{page_id}",
         headers=settings.notion_headers,
-        json={"properties": {"STATUS": {"status": {"name": "Unsuccessful"}}}},
+        json={"properties": {"STATUS": {"status": {"name": status.value}}}},
         proxy=settings.notion_proxy,
     )
     if response.status != 200:
@@ -115,7 +135,7 @@ async def update_notion_status(session: aiohttp.ClientSession, page_id: str) -> 
             f"Couldn't update page {page_id}: {response.status} {await response.text()}"
         )
     else:
-        logger.info(f"Updated page {page_id}: status set to Unsuccessful")
+        logger.info(f"Updated page {page_id}: status set to {status.value}")
 
 
 async def main(workers_num: int) -> None:
