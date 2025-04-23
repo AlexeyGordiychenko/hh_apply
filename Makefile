@@ -2,6 +2,8 @@ clear_send_log:
 	> send_applies.log
 clear_reject_log:
 	> process_rejection.log
+clear_manual_log:
+	> add_manual_applies.log
 
 send_query_test: clear_send_log
 	uv run send_applies.py -t -s query
@@ -24,3 +26,9 @@ get_skipped_applies:
 
 process_rejection: clear_reject_log
 	uv run process_rejection.py
+
+add_manual: clear_manual_log
+	uv run add_manual_applies.py --date "2025-04-23 15:34:00+05"
+
+add_manual_test: clear_manual_log
+	uv run add_manual_applies.py -t --date "2025-04-23 15:34:00+05"
