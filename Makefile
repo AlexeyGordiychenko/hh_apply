@@ -20,7 +20,7 @@ get_manual_applies:
 	grep -i "process test" send_applies.log >> send_applies_manual_$$(date +%d%m).log || true
 	grep -i "external apply required" send_applies.log >> send_applies_manual_$$(date +%d%m).log || true
 get_skipped_applies:
-	grep -i "skipped" send_applies.log | cut -d' ' -f9- | awk '{first=$$1; $$1=""; print substr($$0,2), first}' | sort -u >> send_applies_skipped_$$(date +%d%m).log || true
+	grep -i "SKIPPED due to blacklist words" send_applies.log | cut -d' ' -f9- | awk '{first=$$1; $$1=""; print substr($$0,2), first}' | sort -u >> send_applies_skipped_$$(date +%d%m).log || true
 
 process_rejection: clear_reject_log
 	uv run process_rejection.py

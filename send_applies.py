@@ -109,10 +109,13 @@ async def fetch_vacancy_page(
         )
         for idx, vacancy in enumerate(vacancies):
             logger_basic_message = f"Page={page:02d} idx={idx:02d}: {vacancy['id']} {vacancy['name']} {vacancy['employer']['name']}"
-            if await vacancy_blacklisted(
-                " ".join((vacancy["id"], vacancy["name"], vacancy["employer"]["name"]))
+            if await vacancy_blacklisted_by_words(
+                " ".join((vacancy["name"], vacancy["employer"]["name"]))
             ):
-                logger.info(f"{logger_basic_message} SKIPPED due to blacklist")
+                logger.info(f"{logger_basic_message} SKIPPED due to blacklist words")
+                continue
+            elif await vacancy_blacklisted_by_ids(vacancy["id"]):
+                logger.info(f"{logger_basic_message} SKIPPED due to blacklist ID")
                 continue
             if test_run:
                 logger.info(f"{logger_basic_message} TEST RUN")
@@ -231,11 +234,15 @@ async def add_apply_to_notion(
         logger.info(f"{logger_msg} NOTION: Page created with id: {response_json['id']}")
 
 
-async def vacancy_blacklisted(vacancy_text: str) -> bool:
+async def vacancy_blacklisted_by_words(vacancy_text: str) -> bool:
     return any(
-        word in settings.blacklist
+        word in settings.blacklist_words
         for word in settings.blacklist_regex.findall(vacancy_text.lower())
     )
+
+
+async def vacancy_blacklisted_by_ids(vacancy_id: str) -> bool:
+    return vacancy_id in settings.blacklist_ids
 
 
 async def main(workers_num: int, test_run: bool, search: SearchType) -> None:

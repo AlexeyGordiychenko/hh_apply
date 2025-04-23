@@ -52,8 +52,15 @@ class Settings(BaseSettings):
         return path.read_text() if path.exists() else ""
 
     @computed_field
-    def blacklist(self) -> str:
-        path = Path("blacklist.txt")
+    def blacklist_words(self) -> str:
+        path = Path("blacklist_words.txt")
+        return (
+            set(map(str.lower, path.read_text().splitlines())) if path.exists() else ""
+        )
+
+    @computed_field
+    def blacklist_ids(self) -> str:
+        path = Path("blacklist_ids.txt")
         return (
             set(map(str.lower, path.read_text().splitlines())) if path.exists() else ""
         )
