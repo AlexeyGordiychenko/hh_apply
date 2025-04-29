@@ -3,15 +3,19 @@ import asyncio
 import logging
 from asyncio import Queue, create_task
 from datetime import datetime
+from pathlib import Path
 from typing import List
 
 import aiohttp
 from settings import settings
 
+current_file = Path(__file__)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    filename=__file__.replace(".py", ".log"),
+    format="%(asctime)s - %(levelname)-5s - %(message)s",
+    filename=Path(
+        current_file.parent, "logs", current_file.name.replace(".py", ".log")
+    ),
 )
 logger = logging.getLogger(__name__)
 

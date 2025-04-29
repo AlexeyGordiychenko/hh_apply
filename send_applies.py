@@ -3,16 +3,20 @@ import asyncio
 import logging
 from asyncio import Queue, create_task
 from enum import Enum
+from pathlib import Path
 from typing import List, Optional
 
 import aiohttp
 from exceptions import HH_Limit_Exceeded_Error
 from settings import settings
 
+current_file = Path(__file__)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)-5s - %(message)s",
-    filename=__file__.replace(".py", ".log"),
+    filename=Path(
+        current_file.parent, "logs", current_file.name.replace(".py", ".log")
+    ),
 )
 logger = logging.getLogger(__name__)
 
