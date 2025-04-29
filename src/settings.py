@@ -48,19 +48,19 @@ class Settings(BaseSettings):
 
     @computed_field
     def cover_letter(self) -> str:
-        path = Path("cover_letter.txt")
+        path = Path("data/cover_letter.txt")
         return path.read_text() if path.exists() else ""
 
     @computed_field
     def blacklist_words(self) -> str:
-        path = Path("blacklist_words.txt")
+        path = Path("data/blacklist_words.txt")
         return (
             set(map(str.lower, path.read_text().splitlines())) if path.exists() else ""
         )
 
     @computed_field
     def blacklist_ids(self) -> str:
-        path = Path("blacklist_ids.txt")
+        path = Path("data/blacklist_ids.txt")
         return (
             set(map(str.lower, path.read_text().splitlines())) if path.exists() else ""
         )

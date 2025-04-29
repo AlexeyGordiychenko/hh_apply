@@ -33,7 +33,7 @@ process_rejection: clear_reject_log
 	uv run process_rejection.py
 
 add_manual: clear_manual_log
-	uv run add_manual_applies.py --date "2025-04-23 15:34:00+05"
+	uv run add_manual_applies.py --date "2025-04-24 11:01:00+05"
 
 add_manual_test: clear_manual_log
-	uv run add_manual_applies.py -t --date "2025-04-23 15:34:00+05"
+	uv run add_manual_applies.py -t --date "2025-04-24 11:01:00+05"
