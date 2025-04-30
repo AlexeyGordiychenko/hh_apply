@@ -27,7 +27,7 @@ get_manual_applies:
 	grep -i "process test" $(SEND_LOG) >> $(basename $(SEND_LOG))_manual_$$(date +%d%m).log || true
 	grep -i "external apply required" $(SEND_LOG) >> $(basename $(SEND_LOG))_manual_$$(date +%d%m).log || true
 get_skipped_applies:
-	grep -i "SKIPPED due to blacklist words" $(SEND_LOG) | cut -d' ' -f9- | awk '{first=$$1; $$1=""; print substr($$0,2), first}' | sort -u | grep -v -f $(basename $(SEND_LOG))_skipped_checked.log >> $(basename $(SEND_LOG))_skipped_$$(date +%d%m).log || true
+	grep -i "SKIPPED due to blacklist words" $(SEND_LOG) | cut -d' ' -f9- | awk '{first=$$1; $$1=""; print substr($$0,2), first}' | sort -u | grep -v -F -f $(basename $(SEND_LOG))_skipped_checked.log >> $(basename $(SEND_LOG))_skipped_$$(date +%d%m).log || true
 
 process_rejection: clear_reject_log
 	uv run process_rejection.py
