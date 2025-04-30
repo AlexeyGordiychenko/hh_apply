@@ -1,14 +1,17 @@
 LOG_FOLDER := logs/
 SEND_LOG := $(LOG_FOLDER)send_applies.log
 REJECTION_LOG := $(LOG_FOLDER)process_rejection.log
-MANUAL_LOG := $(LOG_FOLDER)add_manual_applies.log
+ADD_MANUAL_LOG := $(LOG_FOLDER)add_manual_applies.log
+DAY := $$(date +%d%m)
+MANUAL_LOG := $(basename $(SEND_LOG))_manual_$(DAY).log
+SKIPPED_LOG := $(basename $(SEND_LOG))_skipped_$(DAY).log
 
 clear_send_log:
 	> $(SEND_LOG)
 clear_reject_log:
 	> $(REJECTION_LOG)
 clear_manual_log:
-	> $(MANUAL_LOG)
+	> $(ADD_MANUAL_LOG)
 
 send_query_test: clear_send_log
 	uv run send_applies.py -t -s query
@@ -24,9 +27,11 @@ send_similar: clear_send_log
 	$(MAKE) get_skipped_applies
 
 get_manual_applies:
-	grep -i -e "process test" -e "external apply required" $(SEND_LOG) | tr -s ' ' | cut -d' ' -f8- | sort -u | grep -v -F -f $(basename $(SEND_LOG))_manual_checked.log >> $(basename $(SEND_LOG))_manual_$$(date +%d%m).log || true
+	grep -i -e "process test" -e "external apply required" $(SEND_LOG) | tr -s ' ' | cut -d' ' -f8- | sort -u | grep -v -F -f $(basename $(SEND_LOG))_manual_checked.log >> $(MANUAL_LOG) || true
+	sort -u $(MANUAL_LOG) -o $(MANUAL_LOG)
 get_skipped_applies:
-	grep -i "SKIPPED due to blacklist words" $(SEND_LOG) | tr -s ' ' | cut -d' ' -f8- | sort -u | awk '{first=$$1; $$1=""; print substr($$0,2), first}' | grep -v -F -f $(basename $(SEND_LOG))_skipped_checked.log >> $(basename $(SEND_LOG))_skipped_$$(date +%d%m).log || true
+	grep -i "SKIPPED due to blacklist words" $(SEND_LOG) | tr -s ' ' | cut -d' ' -f8- | sort -u | awk '{first=$$1; $$1=""; print substr($$0,2), first}' | grep -v -F -f $(basename $(SEND_LOG))_skipped_checked.log >> $(SKIPPED_LOG) || true
+	sort -u $(SKIPPED_LOG) -o $(SKIPPED_LOG)
 
 process_rejection: clear_reject_log
 	uv run process_rejection.py
