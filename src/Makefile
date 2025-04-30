@@ -24,8 +24,7 @@ send_similar: clear_send_log
 	$(MAKE) get_skipped_applies
 
 get_manual_applies:
-	grep -i "process test" $(SEND_LOG) >> $(basename $(SEND_LOG))_manual_$$(date +%d%m).log || true
-	grep -i "external apply required" $(SEND_LOG) >> $(basename $(SEND_LOG))_manual_$$(date +%d%m).log || true
+	grep -i -e "process test" -e "external apply required" $(SEND_LOG) | tr -s ' ' | cut -d' ' -f8- | sort -u | grep -v -F -f $(basename $(SEND_LOG))_manual_checked.log >> $(basename $(SEND_LOG))_manual_$$(date +%d%m).log || true
 get_skipped_applies:
 	grep -i "SKIPPED due to blacklist words" $(SEND_LOG) | tr -s ' ' | cut -d' ' -f8- | sort -u | awk '{first=$$1; $$1=""; print substr($$0,2), first}' | grep -v -F -f $(basename $(SEND_LOG))_skipped_checked.log >> $(basename $(SEND_LOG))_skipped_$$(date +%d%m).log || true
 
