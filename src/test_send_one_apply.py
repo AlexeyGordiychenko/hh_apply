@@ -12,7 +12,7 @@ def parse_args() -> int:
         type=SearchType,
         choices=list(SearchType),
         default=SearchType.SIMILAR,
-        required=True,
+        required=False,
         help="Search similar or query",
     )
     args = parser.parse_args()
