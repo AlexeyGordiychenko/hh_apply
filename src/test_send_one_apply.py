@@ -1,6 +1,6 @@
 import argparse
 import aiohttp
-from src.send_applies import SearchType, add_apply_to_notion, apply_to_vacancy, get_vacancies_response
+from send_applies import SearchType, add_apply_to_notion, apply_to_vacancy, get_vacancies_response
 
 def parse_args() -> int:
     parser = argparse.ArgumentParser(
